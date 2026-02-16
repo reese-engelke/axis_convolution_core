@@ -1,0 +1,6 @@
+.wcfg
+axi_convolution_core.cache/
+axi_convolution_core.hw/
+axi_convolution_core.ip_user_files/
+axi_convolution_core.sim/
+axi_convolution_core.runs/
