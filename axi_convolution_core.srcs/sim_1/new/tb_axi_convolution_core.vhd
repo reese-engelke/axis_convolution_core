@@ -26,7 +26,7 @@ library work;
 use work.axi_convolution_core;
 -- Uncomment the following library declaration if using
 -- arithmetic functions with Signed or Unsigned values
---use IEEE.NUMERIC_STD.ALL;
+use IEEE.NUMERIC_STD.ALL;
 
 -- Uncomment the following library declaration if instantiating
 -- any Xilinx leaf cells in this code.
@@ -39,6 +39,9 @@ end tb_axi_convolution_core;
 
 architecture Behavioral of tb_axi_convolution_core is
     component axi_convolution_core
+        generic (
+            matrix_size : integer := 3
+        );
         Port ( 
             --***************************
             --Clocks and Resets
@@ -61,7 +64,9 @@ architecture Behavioral of tb_axi_convolution_core is
             m_axis_tlast : out STD_LOGIC
                );
    end component;
-
+   type t_state is (ST_IDLE, ST_STATE1, ST_STATE2, ST_STATE3, ST_STATE4);
+   signal tb_state : t_state := ST_IDLE;
+   
    signal tb_aclk :  STD_LOGIC := '1';
    signal tb_aresetn :  STD_LOGIC;       
 
@@ -74,17 +79,55 @@ architecture Behavioral of tb_axi_convolution_core is
    signal tb_m_axis_tvalid: STD_LOGIC;
    signal tb_m_axis_tready: STD_LOGIC;
    signal tb_m_axis_tlast : STD_LOGIC;
+   
    constant clock_period : time := 10ns;
+   constant matrix_size : integer := 3;
+   
+   signal tb_shift_reg  : integer := 0;
+   signal tb_data_shift : integer := 1;
 begin
 
 tb_aclk <= not tb_aclk after clock_period/2;
 tb_aresetn <= '0', '1' after clock_period*10;
-tb_s_axis_tvalid<= '0', '1' after clock_period*20, '0' after clock_period*39;
-tb_s_axis_tlast <= '0', '1' after clock_period*38, '0' after clock_period*39;
 
+tb_s_axis_tdata <= std_logic_vector(to_unsigned(tb_data_shift,32));
+
+--conv_core slave interface
 process (tb_aresetn, tb_aclk)begin
     if(tb_aresetn = '0') then
-    
+        tb_s_axis_tvalid <= '0';
+        tb_s_axis_tlast <= '0';
+        tb_shift_reg <= 0;
+    elsif(rising_edge(tb_aclk))then
+        case tb_state is
+            when ST_STATE1 => 
+                tb_s_axis_tvalid <= '1';
+                if (tb_s_axis_tready = '1') then
+                   tb_state <= ST_STATE2; 
+                end if;
+                
+            When ST_STATE2 =>
+                tb_shift_reg <= + tb_shift_reg + 1;
+                if(tb_shift_reg = ((matrix_size ** 2)*2)-1)then
+                    tb_state <= ST_STATE3;
+                    tb_s_axis_tlast <= '1';
+                    tb_data_shift <= tb_data_shift + 1;
+                end if;
+                
+            when others =>
+                tb_s_axis_tlast <= '0';
+                tb_state <= ST_STATE1;
+                tb_shift_reg <= 0;
+                
+        end case;
+    end if;
+end process;
+
+
+--conv_core master interface
+process (tb_aresetn, tb_aclk)begin
+    if(tb_aresetn = '0') then
+        tb_m_axis_tready <= '0';
     elsif(rising_edge(tb_aclk))then
         if(tb_m_axis_tvalid = '1') then
             tb_m_axis_tready <= '1';
@@ -92,10 +135,12 @@ process (tb_aresetn, tb_aclk)begin
             tb_m_axis_tready <= '0';
         end if;
     end if;
-
 end process;
 
 dut : axi_convolution_core
+generic map(
+    matrix_size => matrix_size
+)
 port map (
         --***************************
         --Clocks and Resets
