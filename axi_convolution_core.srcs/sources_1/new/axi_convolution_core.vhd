@@ -53,7 +53,7 @@ entity axi_convolution_core is
 end axi_convolution_core;
 
 architecture Behavioral of axi_convolution_core is
-    type t_state is (ST_IDLE, ST_STATE1, ST_STATE2, ST_STATE3, ST_STATE4);
+    type t_state is (ST_IDLE, ST_STATE1, ST_STATE2, ST_STATE3, ST_STATE4, ST_STATE5, ST_STATE6);
     signal st_state : t_state := ST_IDLE;
 
     type t_matrix_1 is array (0 to matrix_size-1, 0 to matrix_size-1) of integer range 0 to 255;
@@ -61,12 +61,19 @@ architecture Behavioral of axi_convolution_core is
     signal q_sample : t_matrix_1;
     type t_matrix_2 is array (0 to matrix_size-1, 0 to matrix_size-1) of integer range 0 to 65025;
     signal q_product : t_matrix_2;
-    signal q_shift_reg : integer;
+    signal q_shift_reg : integer range 0 to (matrix_size**2)-1;
+    signal q_s_axis_tdata : integer range 0 to 255;
+    signal q_acc   : integer range 0 to 585225;
+    signal q_acc_0 : integer range 0 to 195075;
+    signal q_acc_1 : integer range 0 to 195075;
+    signal q_acc_2 : integer range 0 to 195075;
 begin
 
 
 process(aclk, aresetn)
-variable v_acc : integer range 0 to 585225;
+variable v_acc_0 : integer range 0 to 195075;
+variable v_acc_1 : integer range 0 to 195075;
+variable v_acc_2 : integer range 0 to 195075;
 begin
     if(aresetn = '0') then
         s_axis_tready <= '0';
@@ -77,40 +84,72 @@ begin
         q_sample <= (others=>(others=>0));
         q_product <= (others=>(others=>0));
         q_shift_reg <= 0;
+        q_s_axis_tdata <= 0;
+        st_state <= ST_IDLE;
+        q_acc <= 0;
+        q_acc_0 <= 0;
+        q_acc_1 <= 0;
+        q_acc_2 <= 0;
+        v_acc_0 := 0;
+        v_acc_1 := 0;
+        v_acc_2 := 0;
     elsif (rising_edge(aclk)) then
         case st_state is
-            when ST_STATE1 =>
+            when ST_STATE1 => --LOAD KERNEL
                 q_shift_reg <= q_shift_reg + 1;
-                if (q_shift_reg<(matrix_size**2)) then
                     q_kernel((q_shift_reg / matrix_size), (q_shift_reg mod matrix_size)) <= to_integer(unsigned(s_axis_tdata(7 downto 0))); 
-                else
-                    q_sample((q_shift_reg-(matrix_size**2))/matrix_size,(q_shift_reg-(matrix_size**2)) mod matrix_size) <= to_integer(unsigned(s_axis_tdata(7 downto 0))); 
-                end if;
-                if (q_shift_reg=(((matrix_size**2)*2)-1) or s_axis_tlast = '1') then
+                if (q_shift_reg=((matrix_size**2)-1) or s_axis_tlast = '1') then
                     st_state <= ST_STATE2;
                     q_shift_reg <= 0;
                 end if;
-
-            when ST_STATE2 =>
+                
+            when ST_STATE2 => --LOAD SAMPLE 
+                q_shift_reg <= q_shift_reg + 1;
+                q_sample((q_shift_reg / matrix_size), (q_shift_reg mod matrix_size)) <= to_integer(unsigned(s_axis_tdata(7 downto 0)));
+                if (q_shift_reg=((matrix_size**2)-1) or s_axis_tlast = '1') then
+                        st_state <= ST_STATE3;
+                        q_shift_reg <= 0;
+                end if;
+                
+            when ST_STATE3 =>
                 s_axis_tready <= '0';
                 product_gen_i : for i in 0 to matrix_size-1 loop
                    product_loop_j : for j in 0 to matrix_size-1 loop
                         q_product(i,j) <= q_kernel(i,j) * q_sample(i,j);
                     end loop;
                 end loop;
-                    st_state <= ST_STATE3;
-                    q_shift_reg <= 0;
-                    v_acc := 0;
-            when ST_STATE3 =>
-                  sum_gen_i : for i in 0 to matrix_size-1 loop
-                   sum_loop_j : for j in 0 to matrix_size-1 loop
-                        v_acc := v_acc + q_product(i,j);
-                    end loop;
-                end loop;
                 st_state <= ST_STATE4;
+                q_shift_reg <= 0;
+                v_acc_0 := 0;
+                v_acc_1 := 0;
+                v_acc_2 := 0;
                 
-            when ST_STATE4 => 
-                m_axis_tdata <= std_logic_vector(to_unsigned(v_acc,32));
+            when ST_STATE4 =>
+--                  sum_gen_i : for i in 0 to matrix_size-1 loop
+--                   sum_loop_j : for j in 0 to matrix_size-1 loop
+--                        v_acc := v_acc + q_product(i,j);
+--                    end loop;
+--                  end loop;
+                  sum_gen_0_i : for i in 0 to matrix_size-1 loop
+                        v_acc_0 := v_acc_0 + q_product(i,0);
+                  end loop;
+                  sum_gen_1_i : for i in 0 to matrix_size-1 loop
+                        v_acc_1 := v_acc_1 + q_product(i,1);
+                  end loop;
+                  sum_gen_2_i : for i in 0 to matrix_size-1 loop
+                        v_acc_2 := v_acc_2 + q_product(i,2);
+                  end loop;
+                st_state <= ST_STATE5;
+                q_acc_0 <= v_acc_0;
+                q_acc_1 <= v_acc_1;
+                q_acc_2 <= v_acc_2;
+                
+            when ST_STATE5 =>
+                q_acc <= q_acc_0 + q_acc_1 + q_acc_2;
+                st_state <= ST_STATE6;
+                
+            when ST_STATE6 => 
+                m_axis_tdata <= std_logic_vector(to_unsigned(q_acc,32));
                 m_axis_tvalid <= '1';
                 if (m_axis_tready = '1') then
                     m_axis_tlast <= '1';
