@@ -53,7 +53,7 @@ entity axi_convolution_core is
 end axi_convolution_core;
 
 architecture Behavioral of axi_convolution_core is
-    type t_state is (ST_IDLE, ST_STATE1, ST_STATE2, ST_STATE3, ST_STATE4, ST_STATE5, ST_STATE6);
+    type t_state is (ST_IDLE, ST_STATE1, ST_STATE2, ST_STATE3, ST_STATE4, ST_STATE5);
     signal st_state : t_state := ST_IDLE;
 
     type t_matrix_1 is array (0 to matrix_size-1, 0 to matrix_size-1) of integer range 0 to 255;
@@ -61,7 +61,7 @@ architecture Behavioral of axi_convolution_core is
     signal q_sample : t_matrix_1;
     type t_matrix_2 is array (0 to matrix_size-1, 0 to matrix_size-1) of integer range 0 to 65025;
     signal q_product : t_matrix_2;
-    signal q_shift_reg : integer range 0 to (matrix_size**2)-1;
+    signal q_shift_reg : integer range 0 to 4;
     signal q_s_axis_tdata : integer range 0 to 255;
     signal q_acc   : integer range 0 to 585225;
     signal q_acc_0 : integer range 0 to 195075;
@@ -95,36 +95,55 @@ begin
         v_acc_2 := 0;
     elsif (rising_edge(aclk)) then
         case st_state is
-            when ST_STATE1 => --LOAD KERNEL
+            when ST_STATE1 => --LOAD KERNEL AND SAMPLE
                 q_shift_reg <= q_shift_reg + 1;
-                    q_kernel((q_shift_reg / matrix_size), (q_shift_reg mod matrix_size)) <= to_integer(unsigned(s_axis_tdata(7 downto 0))); 
-                if (q_shift_reg=((matrix_size**2)-1) or s_axis_tlast = '1') then
+                case q_shift_reg is
+                    when 0 => 
+                        q_kernel(0,0) <= to_integer(unsigned(s_axis_tdata(31 downto 24))); 
+                        q_kernel(0,1) <= to_integer(unsigned(s_axis_tdata(23 downto 16)));
+                        q_sample(0,0) <= to_integer(unsigned(s_axis_tdata(15 downto  8)));
+                        q_sample(0,1) <= to_integer(unsigned(s_axis_tdata( 7 downto  0)));
+                    when 1 => 
+                        q_kernel(0,2) <= to_integer(unsigned(s_axis_tdata(31 downto 24))); 
+                        q_kernel(1,0) <= to_integer(unsigned(s_axis_tdata(23 downto 16)));
+                        q_sample(0,2) <= to_integer(unsigned(s_axis_tdata(15 downto  8)));
+                        q_sample(1,0) <= to_integer(unsigned(s_axis_tdata( 7 downto  0)));
+                    when 2 => 
+                        q_kernel(1,1) <= to_integer(unsigned(s_axis_tdata(31 downto 24))); 
+                        q_kernel(1,2) <= to_integer(unsigned(s_axis_tdata(23 downto 16)));
+                        q_sample(1,1) <= to_integer(unsigned(s_axis_tdata(15 downto  8)));
+                        q_sample(1,2) <= to_integer(unsigned(s_axis_tdata( 7 downto  0)));
+                    when 3 => 
+                        q_kernel(2,0) <= to_integer(unsigned(s_axis_tdata(31 downto 24))); 
+                        q_kernel(2,1) <= to_integer(unsigned(s_axis_tdata(23 downto 16)));
+                        q_sample(2,0) <= to_integer(unsigned(s_axis_tdata(15 downto  8)));
+                        q_sample(2,1) <= to_integer(unsigned(s_axis_tdata( 7 downto  0)));
+                    when 4 => 
+                        q_kernel(2,2) <= to_integer(unsigned(s_axis_tdata(31 downto 24))); 
+                        q_sample(2,2) <= to_integer(unsigned(s_axis_tdata(15 downto  8)));
+                end case;
+                
+                if (q_shift_reg=4 or s_axis_tlast = '1') then
                     st_state <= ST_STATE2;
                     q_shift_reg <= 0;
                 end if;
                 
-            when ST_STATE2 => --LOAD SAMPLE 
-                q_shift_reg <= q_shift_reg + 1;
-                q_sample((q_shift_reg / matrix_size), (q_shift_reg mod matrix_size)) <= to_integer(unsigned(s_axis_tdata(7 downto 0)));
-                if (q_shift_reg=((matrix_size**2)-1) or s_axis_tlast = '1') then
-                        st_state <= ST_STATE3;
-                        q_shift_reg <= 0;
-                end if;
+           
                 
-            when ST_STATE3 =>
+            when ST_STATE2 =>
                 s_axis_tready <= '0';
                 product_gen_i : for i in 0 to matrix_size-1 loop
                    product_loop_j : for j in 0 to matrix_size-1 loop
                         q_product(i,j) <= q_kernel(i,j) * q_sample(i,j);
                     end loop;
                 end loop;
-                st_state <= ST_STATE4;
+                st_state <= ST_STATE3;
                 q_shift_reg <= 0;
                 v_acc_0 := 0;
                 v_acc_1 := 0;
                 v_acc_2 := 0;
                 
-            when ST_STATE4 =>
+            when ST_STATE3 =>
 --                  sum_gen_i : for i in 0 to matrix_size-1 loop
 --                   sum_loop_j : for j in 0 to matrix_size-1 loop
 --                        v_acc := v_acc + q_product(i,j);
@@ -139,16 +158,16 @@ begin
                   sum_gen_2_i : for i in 0 to matrix_size-1 loop
                         v_acc_2 := v_acc_2 + q_product(i,2);
                   end loop;
-                st_state <= ST_STATE5;
+                st_state <= ST_STATE4;
                 q_acc_0 <= v_acc_0;
                 q_acc_1 <= v_acc_1;
                 q_acc_2 <= v_acc_2;
                 
-            when ST_STATE5 =>
+            when ST_STATE4 =>
                 q_acc <= q_acc_0 + q_acc_1 + q_acc_2;
-                st_state <= ST_STATE6;
+                st_state <= ST_STATE5;
                 
-            when ST_STATE6 => 
+            when ST_STATE5 => 
                 m_axis_tdata <= std_logic_vector(to_unsigned(q_acc,32));
                 m_axis_tvalid <= '1';
                 if (m_axis_tready = '1') then

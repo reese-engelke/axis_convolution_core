@@ -10,59 +10,15 @@
       </db_ref>
    </db_ref_list>
    <zoom_setting>
-      <ZoomStartTime time="999,999 ps"></ZoomStartTime>
-      <ZoomEndTime time="1,000,001 ps"></ZoomEndTime>
-      <Cursor1Time time="1,000,000 ps"></Cursor1Time>
+      <ZoomStartTime time="0.000000 us"></ZoomStartTime>
+      <ZoomEndTime time="6.252101 us"></ZoomEndTime>
+      <Cursor1Time time="1.000000 us"></Cursor1Time>
    </zoom_setting>
    <column_width_setting>
       <NameColumnWidth column_width="412"></NameColumnWidth>
-      <ValueColumnWidth column_width="385"></ValueColumnWidth>
+      <ValueColumnWidth column_width="380"></ValueColumnWidth>
    </column_width_setting>
-   <WVObjectSize size="27" />
-   <wvobject fp_name="/tb_axi_convolution_core/tb_aclk" type="logic">
-      <obj_property name="ElementShortName">tb_aclk</obj_property>
-      <obj_property name="ObjectShortName">tb_aclk</obj_property>
-   </wvobject>
-   <wvobject fp_name="/tb_axi_convolution_core/tb_aresetn" type="logic">
-      <obj_property name="ElementShortName">tb_aresetn</obj_property>
-      <obj_property name="ObjectShortName">tb_aresetn</obj_property>
-   </wvobject>
-   <wvobject fp_name="/tb_axi_convolution_core/tb_s_axis_tdata" type="array">
-      <obj_property name="ElementShortName">tb_s_axis_tdata[31:0]</obj_property>
-      <obj_property name="ObjectShortName">tb_s_axis_tdata[31:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/tb_axi_convolution_core/tb_s_axis_tvalid" type="logic">
-      <obj_property name="ElementShortName">tb_s_axis_tvalid</obj_property>
-      <obj_property name="ObjectShortName">tb_s_axis_tvalid</obj_property>
-   </wvobject>
-   <wvobject fp_name="/tb_axi_convolution_core/tb_s_axis_tready" type="logic">
-      <obj_property name="ElementShortName">tb_s_axis_tready</obj_property>
-      <obj_property name="ObjectShortName">tb_s_axis_tready</obj_property>
-   </wvobject>
-   <wvobject fp_name="/tb_axi_convolution_core/tb_s_axis_tlast" type="logic">
-      <obj_property name="ElementShortName">tb_s_axis_tlast</obj_property>
-      <obj_property name="ObjectShortName">tb_s_axis_tlast</obj_property>
-   </wvobject>
-   <wvobject fp_name="/tb_axi_convolution_core/tb_m_axis_tdata" type="array">
-      <obj_property name="ElementShortName">tb_m_axis_tdata[31:0]</obj_property>
-      <obj_property name="ObjectShortName">tb_m_axis_tdata[31:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/tb_axi_convolution_core/tb_m_axis_tvalid" type="logic">
-      <obj_property name="ElementShortName">tb_m_axis_tvalid</obj_property>
-      <obj_property name="ObjectShortName">tb_m_axis_tvalid</obj_property>
-   </wvobject>
-   <wvobject fp_name="/tb_axi_convolution_core/tb_m_axis_tready" type="logic">
-      <obj_property name="ElementShortName">tb_m_axis_tready</obj_property>
-      <obj_property name="ObjectShortName">tb_m_axis_tready</obj_property>
-   </wvobject>
-   <wvobject fp_name="/tb_axi_convolution_core/tb_m_axis_tlast" type="logic">
-      <obj_property name="ElementShortName">tb_m_axis_tlast</obj_property>
-      <obj_property name="ObjectShortName">tb_m_axis_tlast</obj_property>
-   </wvobject>
-   <wvobject fp_name="/tb_axi_convolution_core/clock_period" type="other">
-      <obj_property name="ElementShortName">clock_period</obj_property>
-      <obj_property name="ObjectShortName">clock_period</obj_property>
-   </wvobject>
+   <WVObjectSize size="21" />
    <wvobject fp_name="/tb_axi_convolution_core/dut/aclk" type="logic">
       <obj_property name="ElementShortName">aclk</obj_property>
       <obj_property name="ObjectShortName">aclk</obj_property>
@@ -119,12 +75,32 @@
       <obj_property name="ElementShortName">q_product[0:2,0:2]</obj_property>
       <obj_property name="ObjectShortName">q_product[0:2,0:2]</obj_property>
    </wvobject>
-   <wvobject fp_name="/tb_axi_convolution_core/dut/q_sum" type="other">
-      <obj_property name="ElementShortName">q_sum</obj_property>
-      <obj_property name="ObjectShortName">q_sum</obj_property>
-   </wvobject>
    <wvobject fp_name="/tb_axi_convolution_core/dut/q_shift_reg" type="other">
       <obj_property name="ElementShortName">q_shift_reg</obj_property>
       <obj_property name="ObjectShortName">q_shift_reg</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_axi_convolution_core/dut/q_s_axis_tdata" type="other">
+      <obj_property name="ElementShortName">q_s_axis_tdata</obj_property>
+      <obj_property name="ObjectShortName">q_s_axis_tdata</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_axi_convolution_core/dut/q_acc" type="other">
+      <obj_property name="ElementShortName">q_acc</obj_property>
+      <obj_property name="ObjectShortName">q_acc</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_axi_convolution_core/dut/q_acc_0" type="other">
+      <obj_property name="ElementShortName">q_acc_0</obj_property>
+      <obj_property name="ObjectShortName">q_acc_0</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_axi_convolution_core/dut/q_acc_1" type="other">
+      <obj_property name="ElementShortName">q_acc_1</obj_property>
+      <obj_property name="ObjectShortName">q_acc_1</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_axi_convolution_core/dut/q_acc_2" type="other">
+      <obj_property name="ElementShortName">q_acc_2</obj_property>
+      <obj_property name="ObjectShortName">q_acc_2</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_axi_convolution_core/dut/matrix_size" type="other">
+      <obj_property name="ElementShortName">matrix_size</obj_property>
+      <obj_property name="ObjectShortName">matrix_size</obj_property>
    </wvobject>
 </wave_config>

@@ -84,7 +84,7 @@ architecture Behavioral of tb_axi_convolution_core is
    constant matrix_size : integer := 3;
    
    signal tb_shift_reg  : integer := 0;
-   signal tb_data_shift : integer := 1;
+   signal tb_data_shift : integer := 16843009;
 begin
 
 tb_aclk <= not tb_aclk after clock_period/2;
@@ -108,10 +108,10 @@ process (tb_aresetn, tb_aclk)begin
                 
             When ST_STATE2 =>
                 tb_shift_reg <= + tb_shift_reg + 1;
-                if(tb_shift_reg = ((matrix_size ** 2)*2)-1)then
+                if(tb_shift_reg = 3 )then
                     tb_state <= ST_STATE3;
                     tb_s_axis_tlast <= '1';
-                    tb_data_shift <= tb_data_shift + 1;
+                    tb_data_shift <= tb_data_shift + 16843009;
                 end if;
                 
             when others =>
