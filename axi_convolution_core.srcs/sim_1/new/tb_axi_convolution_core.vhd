@@ -49,6 +49,23 @@ architecture Behavioral of tb_axi_convolution_core is
             aclk : in STD_LOGIC;
             aresetn : in STD_LOGIC;       
             --***************************
+            --Slave AXI_LITE Config Interface
+            --***************************
+            --write port
+            s_axi_awaddr : in STD_LOGIC_VECTOR(3 downto 0);
+            s_axi_awvalid : in STD_LOGIC;
+            s_axi_awready : out STD_LOGIC;
+            s_axi_wdata : in STD_LOGIC_VECTOR(31 downto 0);
+            s_axi_wvalid : in STD_LOGIC;
+            s_axi_wready : out STD_LOGIC;
+            --read port
+            s_axi_araddr : in STD_LOGIC_VECTOR(3 downto 0);
+            s_axi_arvalid : in STD_LOGIC;
+            s_axi_arready : out STD_LOGIC;
+            s_axi_rdata : out STD_LOGIC_VECTOR(31 downto 0);
+            s_axi_rvalid : out STD_LOGIC;
+            s_axi_rready : in STD_LOGIC;
+            --***************************
             --Slave AXI Stream Interface
             --***************************
             s_axis_tdata : in STD_LOGIC_VECTOR(31 downto 0);
@@ -68,7 +85,23 @@ architecture Behavioral of tb_axi_convolution_core is
    signal tb_state : t_state := ST_IDLE;
    
    signal tb_aclk :  STD_LOGIC := '1';
-   signal tb_aresetn :  STD_LOGIC;       
+   signal tb_aresetn :  STD_LOGIC;     
+     
+   signal tb_s_axi_awaddr      : STD_LOGIC_VECTOR(3 downto 0);
+   signal tb_s_axi_awvalid     : STD_LOGIC;                  
+   signal tb_s_axi_awready     : STD_LOGIC;                 
+   signal tb_s_axi_wdata       : STD_LOGIC_VECTOR(31 downto 0);
+   signal tb_s_axi_wvalid      : STD_LOGIC;                   
+   signal tb_s_axi_wready      : STD_LOGIC;        
+   
+   signal tb_s_axi_araddr   : STD_LOGIC_VECTOR(3 downto 0); 
+   signal tb_s_axi_arvalid  : STD_LOGIC;                   
+   signal tb_s_axi_arready  : STD_LOGIC;                  
+   signal tb_s_axi_rdata    : STD_LOGIC_VECTOR(31 downto 0);
+   signal tb_s_axi_rvalid   : STD_LOGIC;                   
+   signal tb_s_axi_rready   : STD_LOGIC;                    
+             
+   
 
    signal tb_s_axis_tdata : STD_LOGIC_VECTOR(31 downto 0):= (others => '1');
    signal tb_s_axis_tvalid: STD_LOGIC:='0';
@@ -85,12 +118,23 @@ architecture Behavioral of tb_axi_convolution_core is
    
    signal tb_shift_reg  : integer := 0;
    signal tb_data_shift : integer := 1;
+   signal tb_cyc_cnt    : integer := 0;
 begin
 
 tb_aclk <= not tb_aclk after clock_period/2;
 tb_aresetn <= '0', '1' after clock_period*10;
 
 tb_s_axis_tdata <= std_logic_vector(to_unsigned(tb_data_shift,32));
+
+MAIN_TB : process begin
+    wait until (tb_cyc_cnt = 1);
+    assert tb_m_axis_tdata = x"00000009" report "INCORRECT VALUE" severity FAILURE;
+    wait until (tb_cyc_cnt = 2);
+    assert tb_m_axis_tdata = x"00000024" report "INCORRECT VALUE" severity FAILURE;
+    wait until (tb_cyc_cnt = 3);
+    assert tb_m_axis_tdata = x"00000051" report "INCORRECT VALUE" severity FAILURE;
+end process;
+
 
 --conv_core slave interface
 process (tb_aresetn, tb_aclk)begin
@@ -134,8 +178,12 @@ process (tb_aresetn, tb_aclk)begin
         else
             tb_m_axis_tready <= '0';
         end if;
+        if (tb_m_axis_tlast = '1') then
+            tb_cyc_cnt <= tb_cyc_cnt + 1;
+        end if;
     end if;
 end process;
+
 
 dut : axi_convolution_core
 generic map(
@@ -147,6 +195,23 @@ port map (
         --***************************
         aclk    => tb_aclk
        ,aresetn => tb_aresetn    
+       --***************************
+       --Slave AXI_LITE Config Interface
+       --***************************
+       --write port
+       ,s_axi_awaddr  => tb_s_axi_awaddr 
+       ,s_axi_awvalid => tb_s_axi_awvalid
+       ,s_axi_awready => tb_s_axi_awready
+       ,s_axi_wdata   => tb_s_axi_wdata  
+       ,s_axi_wvalid  => tb_s_axi_wvalid 
+       ,s_axi_wready  => tb_s_axi_wready 
+       --read port  
+       ,s_axi_araddr  => tb_s_axi_araddr 
+       ,s_axi_arvalid => tb_s_axi_arvalid
+       ,s_axi_arready => tb_s_axi_arready
+       ,s_axi_rdata   => tb_s_axi_rdata  
+       ,s_axi_rvalid  => tb_s_axi_rvalid 
+       ,s_axi_rready  => tb_s_axi_rready 
         --***************************
         --Slave AXI Stream Interface
         --***************************

@@ -7,7 +7,7 @@
 -- Module Name: axi_convolution_core - Behavioral
 -- Project Name: N/A
 -- Target Devices: Any
--- Tool Versions: vivado 2025.1
+-- Tool Versions: vivado 2025.2
 -- Description: 
 -- 
 -- Dependencies: 
@@ -15,7 +15,11 @@
 -- Revision:
 -- Revision 0.01 - File Created
 -- Additional Comments:
--- 
+-- TODO LIST:
+-- Change accumulate signals into array
+-- Add t_user signal to indicate if stream is kernel or sample data
+-- Or do I add a second stream or axi_lite?
+-- I like the the axi_lite interface Idea
 ----------------------------------------------------------------------------------
 
 
@@ -35,6 +39,23 @@ entity axi_convolution_core is
         --***************************
         aclk : in STD_LOGIC;
         aresetn : in STD_LOGIC;       
+        --***************************
+        --Slave AXI_LITE Config Interface
+        --***************************
+        --write port
+        s_axi_awaddr : in STD_LOGIC_VECTOR(3 downto 0);
+        s_axi_awvalid : in STD_LOGIC;
+        s_axi_awready : out STD_LOGIC;
+        s_axi_wdata : in STD_LOGIC_VECTOR(31 downto 0);
+        s_axi_wvalid : in STD_LOGIC;
+        s_axi_wready : out STD_LOGIC;
+        --read port
+        s_axi_araddr : in STD_LOGIC_VECTOR(3 downto 0);
+        s_axi_arvalid : in STD_LOGIC;
+        s_axi_arready : out STD_LOGIC;
+        s_axi_rdata : out STD_LOGIC_VECTOR(31 downto 0);
+        s_axi_rvalid : out STD_LOGIC;
+        s_axi_rready : in STD_LOGIC;
         --***************************
         --Slave AXI Stream Interface
         --***************************
@@ -63,17 +84,14 @@ architecture Behavioral of axi_convolution_core is
     signal q_product : t_matrix_2;
     signal q_shift_reg : integer range 0 to (matrix_size**2)-1;
     signal q_s_axis_tdata : integer range 0 to 255;
-    signal q_acc   : integer range 0 to 585225;
-    signal q_acc_0 : integer range 0 to 195075;
-    signal q_acc_1 : integer range 0 to 195075;
-    signal q_acc_2 : integer range 0 to 195075;
+    signal q_acc_stage_2  : integer range 0 to 585225;
+    type t_acc is array (0 to 2) of integer range 0 to 195075;
+    signal q_acc_stage_1 : t_acc;
 begin
 
 
 process(aclk, aresetn)
-variable v_acc_0 : integer range 0 to 195075;
-variable v_acc_1 : integer range 0 to 195075;
-variable v_acc_2 : integer range 0 to 195075;
+variable v_acc_stage_1 : t_acc;
 begin
     if(aresetn = '0') then
         s_axis_tready <= '0';
@@ -86,13 +104,9 @@ begin
         q_shift_reg <= 0;
         q_s_axis_tdata <= 0;
         st_state <= ST_IDLE;
-        q_acc <= 0;
-        q_acc_0 <= 0;
-        q_acc_1 <= 0;
-        q_acc_2 <= 0;
-        v_acc_0 := 0;
-        v_acc_1 := 0;
-        v_acc_2 := 0;
+        q_acc_stage_2 <= 0;
+        v_acc_stage_1 := (others=>0);
+        q_acc_stage_1 <= (others=>0);
     elsif (rising_edge(aclk)) then
         case st_state is
             when ST_STATE1 => --LOAD KERNEL
@@ -111,7 +125,7 @@ begin
                         q_shift_reg <= 0;
                 end if;
                 
-            when ST_STATE3 =>
+            when ST_STATE3 => -- 9x9 multiply
                 s_axis_tready <= '0';
                 product_gen_i : for i in 0 to matrix_size-1 loop
                    product_loop_j : for j in 0 to matrix_size-1 loop
@@ -120,43 +134,34 @@ begin
                 end loop;
                 st_state <= ST_STATE4;
                 q_shift_reg <= 0;
-                v_acc_0 := 0;
-                v_acc_1 := 0;
-                v_acc_2 := 0;
+                v_acc_stage_1 := (others=>0);
                 
-            when ST_STATE4 =>
---                  sum_gen_i : for i in 0 to matrix_size-1 loop
---                   sum_loop_j : for j in 0 to matrix_size-1 loop
---                        v_acc := v_acc + q_product(i,j);
---                    end loop;
---                  end loop;
+            when ST_STATE4 => --accumulate stage 1
                   sum_gen_0_i : for i in 0 to matrix_size-1 loop
-                        v_acc_0 := v_acc_0 + q_product(i,0);
+                    v_acc_stage_1(0) := v_acc_stage_1(0) + q_product(i,0);
                   end loop;
                   sum_gen_1_i : for i in 0 to matrix_size-1 loop
-                        v_acc_1 := v_acc_1 + q_product(i,1);
+                    v_acc_stage_1(1) := v_acc_stage_1(1) + q_product(i,1);
                   end loop;
                   sum_gen_2_i : for i in 0 to matrix_size-1 loop
-                        v_acc_2 := v_acc_2 + q_product(i,2);
+                    v_acc_stage_1(2) := v_acc_stage_1(2) + q_product(i,2);
                   end loop;
                 st_state <= ST_STATE5;
-                q_acc_0 <= v_acc_0;
-                q_acc_1 <= v_acc_1;
-                q_acc_2 <= v_acc_2;
+                q_acc_stage_1 <= v_acc_stage_1;
                 
-            when ST_STATE5 =>
-                q_acc <= q_acc_0 + q_acc_1 + q_acc_2;
+            when ST_STATE5 => --accumulate stage 2
+                q_acc_stage_2 <= q_acc_stage_1(0) + q_acc_stage_1(1) + q_acc_stage_1(2);
                 st_state <= ST_STATE6;
                 
-            when ST_STATE6 => 
-                m_axis_tdata <= std_logic_vector(to_unsigned(q_acc,32));
+            when ST_STATE6 => --Transmit results
+                m_axis_tdata <= std_logic_vector(to_unsigned(q_acc_stage_2, 32));
                 m_axis_tvalid <= '1';
                 if (m_axis_tready = '1') then
                     m_axis_tlast <= '1';
                     st_state <= ST_IDLE;
                 end if; 
                 
-            when others =>
+            when others => --IDLE
                 m_axis_tvalid <= '0';
                 m_axis_tlast <= '0';
                 if (s_axis_tvalid = '1') then
