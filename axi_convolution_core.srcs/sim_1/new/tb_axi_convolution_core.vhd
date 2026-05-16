@@ -52,14 +52,14 @@ architecture Behavioral of tb_axi_convolution_core is
             --Slave AXI_LITE Config Interface
             --***************************
             --write port
-            s_axi_awaddr : in STD_LOGIC_VECTOR(3 downto 0);
+            s_axi_awaddr : in STD_LOGIC_VECTOR(7 downto 0);
             s_axi_awvalid : in STD_LOGIC;
             s_axi_awready : out STD_LOGIC;
             s_axi_wdata : in STD_LOGIC_VECTOR(31 downto 0);
             s_axi_wvalid : in STD_LOGIC;
             s_axi_wready : out STD_LOGIC;
             --read port
-            s_axi_araddr : in STD_LOGIC_VECTOR(3 downto 0);
+            s_axi_araddr : in STD_LOGIC_VECTOR(7 downto 0);
             s_axi_arvalid : in STD_LOGIC;
             s_axi_arready : out STD_LOGIC;
             s_axi_rdata : out STD_LOGIC_VECTOR(31 downto 0);
@@ -87,14 +87,14 @@ architecture Behavioral of tb_axi_convolution_core is
    signal tb_aclk :  STD_LOGIC := '1';
    signal tb_aresetn :  STD_LOGIC;     
      
-   signal tb_s_axi_awaddr      : STD_LOGIC_VECTOR(3 downto 0);
+   signal tb_s_axi_awaddr      : STD_LOGIC_VECTOR(7 downto 0);
    signal tb_s_axi_awvalid     : STD_LOGIC;                  
    signal tb_s_axi_awready     : STD_LOGIC;                 
    signal tb_s_axi_wdata       : STD_LOGIC_VECTOR(31 downto 0);
    signal tb_s_axi_wvalid      : STD_LOGIC;                   
    signal tb_s_axi_wready      : STD_LOGIC;        
    
-   signal tb_s_axi_araddr   : STD_LOGIC_VECTOR(3 downto 0); 
+   signal tb_s_axi_araddr   : STD_LOGIC_VECTOR(7 downto 0); 
    signal tb_s_axi_arvalid  : STD_LOGIC;                   
    signal tb_s_axi_arready  : STD_LOGIC;                  
    signal tb_s_axi_rdata    : STD_LOGIC_VECTOR(31 downto 0);
@@ -119,6 +119,7 @@ architecture Behavioral of tb_axi_convolution_core is
    signal tb_shift_reg  : integer := 0;
    signal tb_data_shift : integer := 1;
    signal tb_cyc_cnt    : integer := 0;
+   signal tb_enable : std_logic;
 begin
 
 tb_aclk <= not tb_aclk after clock_period/2;
@@ -127,6 +128,9 @@ tb_aresetn <= '0', '1' after clock_period*10;
 tb_s_axis_tdata <= std_logic_vector(to_unsigned(tb_data_shift,32));
 
 MAIN_TB : process begin
+--    wait until tb_aresetn = '1';
+--    wait until tb_aclk = '1';
+    tb_enable <= '1';
     wait until (tb_cyc_cnt = 1);
     assert tb_m_axis_tdata = x"00000009" report "INCORRECT VALUE" severity FAILURE;
     wait until (tb_cyc_cnt = 2);
@@ -159,9 +163,11 @@ process (tb_aresetn, tb_aclk)begin
                 end if;
                 
             when others =>
-                tb_s_axis_tlast <= '0';
-                tb_state <= ST_STATE1;
-                tb_shift_reg <= 0;
+                if (tb_enable = '1') then
+                    tb_s_axis_tlast <= '0';
+                    tb_state <= ST_STATE1;
+                    tb_shift_reg <= 0;
+                end if;
                 
         end case;
     end if;

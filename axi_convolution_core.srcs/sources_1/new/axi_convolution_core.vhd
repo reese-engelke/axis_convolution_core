@@ -43,14 +43,14 @@ entity axi_convolution_core is
         --Slave AXI_LITE Config Interface
         --***************************
         --write port
-        s_axi_awaddr : in STD_LOGIC_VECTOR(3 downto 0);
+        s_axi_awaddr : in STD_LOGIC_VECTOR(7 downto 0);
         s_axi_awvalid : in STD_LOGIC;
         s_axi_awready : out STD_LOGIC;
         s_axi_wdata : in STD_LOGIC_VECTOR(31 downto 0);
         s_axi_wvalid : in STD_LOGIC;
         s_axi_wready : out STD_LOGIC;
         --read port
-        s_axi_araddr : in STD_LOGIC_VECTOR(3 downto 0);
+        s_axi_araddr : in STD_LOGIC_VECTOR(7 downto 0);
         s_axi_arvalid : in STD_LOGIC;
         s_axi_arready : out STD_LOGIC;
         s_axi_rdata : out STD_LOGIC_VECTOR(31 downto 0);
@@ -74,9 +74,11 @@ entity axi_convolution_core is
 end axi_convolution_core;
 
 architecture Behavioral of axi_convolution_core is
-    type t_state is (ST_IDLE, ST_STATE1, ST_STATE2, ST_STATE3, ST_STATE4, ST_STATE5, ST_STATE6);
-    signal st_state : t_state := ST_IDLE;
-
+    type t_conv_state is (ST_IDLE, ST_STATE1, ST_STATE2, ST_STATE3, ST_STATE4, ST_STATE5, ST_STATE6);
+    signal st_conv_state : t_conv_state := ST_IDLE;
+    type t_cnfg_state is (ST_IDLE, ST_STATE1, ST_STATE2, ST_STATE3, ST_STATE4, ST_STATE5, ST_STATE6);
+    signal st_cnfg_state : t_cnfg_state := ST_IDLE;
+    
     type t_matrix_1 is array (0 to matrix_size-1, 0 to matrix_size-1) of integer range 0 to 255;
     signal q_kernel : t_matrix_1;
     signal q_sample : t_matrix_1;
@@ -87,10 +89,62 @@ architecture Behavioral of axi_convolution_core is
     signal q_acc_stage_2  : integer range 0 to 585225;
     type t_acc is array (0 to 2) of integer range 0 to 195075;
     signal q_acc_stage_1 : t_acc;
+    signal q_enable : std_logic;
+    
+    constant conv_core_enable_addr : std_logic_vector (7 downto 0) := x"00";
+    constant conv_kernel_0_3_addr : std_logic_vector (7 downto 0) := x"04";
+    constant conv_kernel_4_7_addr : std_logic_vector (7 downto 0) := x"08";
+    constant conv_kernel_8_addr   : std_logic_vector (7 downto 0) := x"12";
+    
+    
 begin
 
 
-process(aclk, aresetn)
+axi_lite_cnfg : process(aclk, aresetn)
+begin
+    if(aresetn = '0') then
+        s_axi_awready <= '0';
+        s_axi_wready <= '0';
+        s_axi_arready <= '0';
+        s_axi_rdata <= (others=>'0');
+        s_axi_rvalid <= '0';
+        q_enable <= '0';
+    elsif(rising_edge(aclk))then
+        if (s_axi_awvalid = '1') then
+            s_axi_arready <= '1';
+            if(s_axi_wvalid = '1') then
+                q_enable <= s_axi_wdata(0) when s_axi_awaddr = conv_core_enable_addr;
+--                when conv_kernel_0_3_addr => 
+--                    q_kernel(0,0) <=  to_integer(unsigned(s_axi_wdata(7  downto 0)));
+--                    q_kernel(0,1) <=  to_integer(unsigned(s_axi_wdata(15 downto 8)));
+--                    q_kernel(0,2) <=  to_integer(unsigned(s_axi_wdata(23 downto 16)));
+--                    q_kernel(1,0) <=  to_integer(unsigned(s_axi_wdata(31 downto 24)));
+--                when conv_kernel_4_7_addr => 
+--                    q_kernel(1,1) <=  to_integer(unsigned(s_axi_wdata(7  downto 0)));
+--                    q_kernel(1,2) <=  to_integer(unsigned(s_axi_wdata(15 downto 8)));
+--                    q_kernel(2,0) <=  to_integer(unsigned(s_axi_wdata(23 downto 16)));
+--                    q_kernel(2,1) <=  to_integer(unsigned(s_axi_wdata(31 downto 24)));
+--                when conv_kernel_8_addr =>
+--                    q_kernel(2,2) <=  to_integer(unsigned(s_axi_wdata(7  downto 0)));
+--                when others => 
+            end if;
+       else
+       
+       end if;
+        
+
+            s_axi_rvalid <= '0';
+                if (s_axi_awvalid = '1') then
+                    st_cnfg_state <= ST_STATE1;
+                    s_axi_arready <= '1';
+                else
+                    s_axi_arready <= '0';
+                end if;
+
+    end if;
+end process;
+
+axis_conv : process(aclk, aresetn)
 variable v_acc_stage_1 : t_acc;
 begin
     if(aresetn = '0') then
@@ -103,17 +157,17 @@ begin
         q_product <= (others=>(others=>0));
         q_shift_reg <= 0;
         q_s_axis_tdata <= 0;
-        st_state <= ST_IDLE;
+        st_conv_state <= ST_IDLE;
         q_acc_stage_2 <= 0;
         v_acc_stage_1 := (others=>0);
         q_acc_stage_1 <= (others=>0);
     elsif (rising_edge(aclk)) then
-        case st_state is
+        case st_conv_state is
             when ST_STATE1 => --LOAD KERNEL
                 q_shift_reg <= q_shift_reg + 1;
                     q_kernel((q_shift_reg / matrix_size), (q_shift_reg mod matrix_size)) <= to_integer(unsigned(s_axis_tdata(7 downto 0))); 
                 if (q_shift_reg=((matrix_size**2)-1) or s_axis_tlast = '1') then
-                    st_state <= ST_STATE2;
+                    st_conv_state <= ST_STATE2;
                     q_shift_reg <= 0;
                 end if;
                 
@@ -121,7 +175,7 @@ begin
                 q_shift_reg <= q_shift_reg + 1;
                 q_sample((q_shift_reg / matrix_size), (q_shift_reg mod matrix_size)) <= to_integer(unsigned(s_axis_tdata(7 downto 0)));
                 if (q_shift_reg=((matrix_size**2)-1) or s_axis_tlast = '1') then
-                        st_state <= ST_STATE3;
+                        st_conv_state <= ST_STATE3;
                         q_shift_reg <= 0;
                 end if;
                 
@@ -132,7 +186,7 @@ begin
                         q_product(i,j) <= q_kernel(i,j) * q_sample(i,j);
                     end loop;
                 end loop;
-                st_state <= ST_STATE4;
+                st_conv_state <= ST_STATE4;
                 q_shift_reg <= 0;
                 v_acc_stage_1 := (others=>0);
                 
@@ -146,26 +200,26 @@ begin
                   sum_gen_2_i : for i in 0 to matrix_size-1 loop
                     v_acc_stage_1(2) := v_acc_stage_1(2) + q_product(i,2);
                   end loop;
-                st_state <= ST_STATE5;
+                st_conv_state <= ST_STATE5;
                 q_acc_stage_1 <= v_acc_stage_1;
                 
             when ST_STATE5 => --accumulate stage 2
                 q_acc_stage_2 <= q_acc_stage_1(0) + q_acc_stage_1(1) + q_acc_stage_1(2);
-                st_state <= ST_STATE6;
+                st_conv_state <= ST_STATE6;
                 
             when ST_STATE6 => --Transmit results
                 m_axis_tdata <= std_logic_vector(to_unsigned(q_acc_stage_2, 32));
                 m_axis_tvalid <= '1';
                 if (m_axis_tready = '1') then
                     m_axis_tlast <= '1';
-                    st_state <= ST_IDLE;
+                    st_conv_state <= ST_IDLE;
                 end if; 
                 
             when others => --IDLE
                 m_axis_tvalid <= '0';
                 m_axis_tlast <= '0';
-                if (s_axis_tvalid = '1') then
-                    st_state <= ST_STATE1;
+                if (s_axis_tvalid = '1' and q_enable = '1') then
+                    st_conv_state <= ST_STATE1;
                     s_axis_tready <= '1';
                     q_shift_reg <= 0;
                 else
