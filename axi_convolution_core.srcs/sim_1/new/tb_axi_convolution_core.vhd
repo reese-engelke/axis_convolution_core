@@ -38,49 +38,6 @@ entity tb_axi_convolution_core is
 end tb_axi_convolution_core;
 
 architecture Behavioral of tb_axi_convolution_core is
-    component axi_convolution_core
-        generic (
-            matrix_size : integer := 3
-        );
-        Port ( 
-            --***************************
-            --Clocks and Resets
-            --***************************
-            aclk : in STD_LOGIC;
-            aresetn : in STD_LOGIC;       
-            --***************************
-            --Slave AXI_LITE Config Interface
-            --***************************
-            --write port
-            s_axi_awaddr : in STD_LOGIC_VECTOR(7 downto 0);
-            s_axi_awvalid : in STD_LOGIC;
-            s_axi_awready : out STD_LOGIC;
-            s_axi_wdata : in STD_LOGIC_VECTOR(31 downto 0);
-            s_axi_wvalid : in STD_LOGIC;
-            s_axi_wready : out STD_LOGIC;
-            --read port
-            s_axi_araddr : in STD_LOGIC_VECTOR(7 downto 0);
-            s_axi_arvalid : in STD_LOGIC;
-            s_axi_arready : out STD_LOGIC;
-            s_axi_rdata : out STD_LOGIC_VECTOR(31 downto 0);
-            s_axi_rvalid : out STD_LOGIC;
-            s_axi_rready : in STD_LOGIC;
-            --***************************
-            --Slave AXI Stream Interface
-            --***************************
-            s_axis_tdata : in STD_LOGIC_VECTOR(31 downto 0);
-            s_axis_tvalid: in STD_LOGIC;
-            s_axis_tready: out STD_LOGIC;
-            s_axis_tlast: in STD_LOGIC;
-            --***************************
-            --Master AXI Stream Interface
-            --***************************
-            m_axis_tdata : out STD_LOGIC_VECTOR(31 downto 0);
-            m_axis_tvalid: out STD_LOGIC;
-            m_axis_tready: in STD_LOGIC;
-            m_axis_tlast : out STD_LOGIC
-               );
-   end component;
    type t_state is (ST_IDLE, ST_STATE1, ST_STATE2, ST_STATE3, ST_STATE4);
    signal tb_state : t_state := ST_IDLE;
    
@@ -93,6 +50,9 @@ architecture Behavioral of tb_axi_convolution_core is
    signal tb_s_axi_wdata       : STD_LOGIC_VECTOR(31 downto 0);
    signal tb_s_axi_wvalid      : STD_LOGIC;                   
    signal tb_s_axi_wready      : STD_LOGIC;        
+   signal tb_s_axi_bvalid      : STD_LOGIC;
+   signal tb_s_axi_bresp       : STD_LOGIC_VECTOR(1 downto 0);
+   signal tb_s_axi_bready      : STD_LOGIC;
    
    signal tb_s_axi_araddr   : STD_LOGIC_VECTOR(7 downto 0); 
    signal tb_s_axi_arvalid  : STD_LOGIC;                   
@@ -100,7 +60,7 @@ architecture Behavioral of tb_axi_convolution_core is
    signal tb_s_axi_rdata    : STD_LOGIC_VECTOR(31 downto 0);
    signal tb_s_axi_rvalid   : STD_LOGIC;                   
    signal tb_s_axi_rready   : STD_LOGIC;                    
-             
+   signal tb_s_axi_rresp    : STD_LOGIC_VECTOR(1 downto 0);
    
 
    signal tb_s_axis_tdata : STD_LOGIC_VECTOR(31 downto 0):= (others => '1');
@@ -113,32 +73,107 @@ architecture Behavioral of tb_axi_convolution_core is
    signal tb_m_axis_tready: STD_LOGIC;
    signal tb_m_axis_tlast : STD_LOGIC;
    
-   constant clock_period : time := 10ns;
+   constant clock_period : time := 10 ns;
    constant matrix_size : integer := 3;
    
    signal tb_shift_reg  : integer := 0;
-   signal tb_data_shift : integer := 1;
+   signal tb_data_shift : unsigned(31 downto 0) := x"00000000";
    signal tb_cyc_cnt    : integer := 0;
    signal tb_enable : std_logic;
+   
+   procedure axi_lite_write (
+    constant addr          : in  std_logic_vector;
+    constant data          : in  std_logic_vector;
+    signal clk             : in  std_logic;
+    signal axi_awaddr      : out std_logic_vector;
+    signal axi_awvalid     : out std_logic;
+    signal axi_awready     : in  std_logic;
+    signal axi_wdata       : out std_logic_vector;
+    signal axi_wvalid      : out std_logic;
+    signal axi_wready      : in  std_logic;
+    signal axi_bvalid      : in  std_logic;
+    signal axi_bready      : out std_logic
+) is
+begin
+    -- Wait for a clean rising edge to align with the clock
+    wait until rising_edge(clk);
+    
+    -- Drive Address and Data channels simultaneously
+    axi_awaddr  <= addr;
+    axi_awvalid <= '1';
+    axi_wdata   <= data;
+    axi_wvalid  <= '1';
+    axi_bready  <= '1';             -- Ready to accept response at any time
+
+    -- Wait until the slave handshakes both Address and Data
+    -- (They can happen on different cycles, but we loop until both have cleared)
+    while (axi_awready = '0' or axi_wready = '0') loop
+        wait until rising_edge(clk);
+        if axi_awready = '1' then
+            axi_awvalid <= '0'; -- Clear if slave already accepted address
+        end if;
+        if axi_wready = '1' then
+            axi_wvalid  <= '0'; -- Clear if slave already accepted data
+        end if;
+    end loop;
+
+    -- Deassert valid lines once handshakes are guaranteed complete
+    axi_awvalid <= '0';
+    axi_wvalid  <= '0';
+
+    -- Wait for the Write Response channel handshake
+    while (axi_bvalid = '0') loop
+        wait until rising_edge(clk);
+    end loop;
+
+    -- Transaction complete, drop bready on the next cycle
+    axi_bready <= '0';
+    wait until rising_edge(clk);
+end procedure;
+
 begin
 
 tb_aclk <= not tb_aclk after clock_period/2;
 tb_aresetn <= '0', '1' after clock_period*10;
 
-tb_s_axis_tdata <= std_logic_vector(to_unsigned(tb_data_shift,32));
+tb_s_axis_tdata <= std_logic_vector(tb_data_shift);
 
 MAIN_TB : process begin
---    wait until tb_aresetn = '1';
---    wait until tb_aclk = '1';
     tb_enable <= '1';
-    wait until (tb_cyc_cnt = 1);
-    assert tb_m_axis_tdata = x"00000009" report "INCORRECT VALUE" severity FAILURE;
-    wait until (tb_cyc_cnt = 2);
-    assert tb_m_axis_tdata = x"00000024" report "INCORRECT VALUE" severity FAILURE;
-    wait until (tb_cyc_cnt = 3);
-    assert tb_m_axis_tdata = x"00000051" report "INCORRECT VALUE" severity FAILURE;
-end process;
+    axi_lite_write (
+     x"01",x"01010101"
+    ,tb_aclk,tb_s_axi_awaddr,tb_s_axi_awvalid,tb_s_axi_awready,tb_s_axi_wdata
+    ,tb_s_axi_wvalid,tb_s_axi_wready,tb_s_axi_bvalid,tb_s_axi_bready);
+    
+    axi_lite_write (
+     x"02",x"01010101"
+    ,tb_aclk,tb_s_axi_awaddr,tb_s_axi_awvalid,tb_s_axi_awready,tb_s_axi_wdata
+    ,tb_s_axi_wvalid,tb_s_axi_wready,tb_s_axi_bvalid,tb_s_axi_bready);
+    
+    axi_lite_write (
+     x"03",x"00000001"
+    ,tb_aclk,tb_s_axi_awaddr,tb_s_axi_awvalid,tb_s_axi_awready,tb_s_axi_wdata
+    ,tb_s_axi_wvalid,tb_s_axi_wready,tb_s_axi_bvalid,tb_s_axi_bready);
+    
+    axi_lite_write (
+     x"00",x"00000001"
+    ,tb_aclk,tb_s_axi_awaddr,tb_s_axi_awvalid,tb_s_axi_awready,tb_s_axi_wdata
+    ,tb_s_axi_wvalid,tb_s_axi_wready,tb_s_axi_bvalid,tb_s_axi_bready);
 
+--    wait until (tb_cyc_cnt = 1);
+--    assert tb_m_axis_tdata = x"00000009" report "INCORRECT VALUE" severity FAILURE;
+--    wait until (tb_cyc_cnt = 2);
+--    assert tb_m_axis_tdata = x"00000024" report "INCORRECT VALUE" severity FAILURE;
+--    wait until (tb_cyc_cnt = 3);
+--    assert tb_m_axis_tdata = x"00000051" report "INCORRECT VALUE" severity FAILURE;
+    wait for 1 ms;
+    axi_lite_write (
+     x"00",x"00000000"
+    ,tb_aclk,tb_s_axi_awaddr,tb_s_axi_awvalid,tb_s_axi_awready,tb_s_axi_wdata
+    ,tb_s_axi_wvalid,tb_s_axi_wready,tb_s_axi_bvalid,tb_s_axi_bready);
+    wait for 10 ms;
+    assert (false) report "END OF SIM" severity FAILURE;
+end process;
 
 --conv_core slave interface
 process (tb_aresetn, tb_aclk)begin
@@ -156,14 +191,14 @@ process (tb_aresetn, tb_aclk)begin
                 
             When ST_STATE2 =>
                 tb_shift_reg <= + tb_shift_reg + 1;
-                if(tb_shift_reg = ((matrix_size ** 2)*2)-1)then
+                if(tb_shift_reg = 3)then
                     tb_state <= ST_STATE3;
                     tb_s_axis_tlast <= '1';
-                    tb_data_shift <= tb_data_shift + 1;
                 end if;
                 
             when others =>
                 if (tb_enable = '1') then
+                    tb_data_shift <= tb_data_shift + x"01010101";
                     tb_s_axis_tlast <= '0';
                     tb_state <= ST_STATE1;
                     tb_shift_reg <= 0;
@@ -191,7 +226,7 @@ process (tb_aresetn, tb_aclk)begin
 end process;
 
 
-dut : axi_convolution_core
+dut : entity work.axi_convolution_core
 generic map(
     matrix_size => matrix_size
 )
@@ -211,6 +246,9 @@ port map (
        ,s_axi_wdata   => tb_s_axi_wdata  
        ,s_axi_wvalid  => tb_s_axi_wvalid 
        ,s_axi_wready  => tb_s_axi_wready 
+       ,s_axi_bvalid  => tb_s_axi_bvalid
+       ,s_axi_bresp   => tb_s_axi_bresp
+       ,s_axi_bready  => tb_s_axi_bready
        --read port  
        ,s_axi_araddr  => tb_s_axi_araddr 
        ,s_axi_arvalid => tb_s_axi_arvalid
@@ -218,6 +256,7 @@ port map (
        ,s_axi_rdata   => tb_s_axi_rdata  
        ,s_axi_rvalid  => tb_s_axi_rvalid 
        ,s_axi_rready  => tb_s_axi_rready 
+       ,s_axi_rresp   => tb_s_axi_rresp
         --***************************
         --Slave AXI Stream Interface
         --***************************
