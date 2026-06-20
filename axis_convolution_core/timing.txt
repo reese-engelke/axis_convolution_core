@@ -1,0 +1,11 @@
+Fastest synthesis clock 5.278 period = 189.46 MHz
+
+data rate: 
+beginning 270 ns - 370 ns = 100 ns = 10 cycles
+digest = 9x8= 72 bits = 9 bytes
+
+18.946MBs = 151.568Mbps
+
+@100MHz max throughput = 10MB/s = 80Mbps
+latency 10 cycles
+270 - 340 to 
