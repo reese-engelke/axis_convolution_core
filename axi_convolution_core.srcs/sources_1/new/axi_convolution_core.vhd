@@ -88,7 +88,7 @@ architecture Behavioral of axi_convolution_core is
     signal q_sample : t_matrix_1;
     type t_matrix_2 is array (0 to matrix_size-1, 0 to matrix_size-1) of integer range 0 to 65025;
     signal q_product : t_matrix_2;
-    signal q_shift_reg : integer range 0 to (matrix_size**2)-1;
+    signal q_shift_reg : integer range 0 to 4;
     signal q_s_axis_tdata : integer range 0 to 255;
     signal q_acc_stage_2  : integer range 0 to 585225;
     type t_acc is array (0 to 2) of integer range 0 to 195075;
